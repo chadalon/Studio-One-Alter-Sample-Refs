@@ -1,22 +1,40 @@
 ﻿using System.IO.Compression;
 using System.Text;
 using System.Xml;
+using System.Xml.Linq;
 
 // todo check for wonky symbols in file names
+// todo backup the file for them (ask if they want to store em or smth??
+// todo make this wpf maybes
+// todo readme
+// todo user needs to select shit
+// tell em it just nukes all cur refs, even if they work
+// TODO do impact, presence files, and maybe others
 
 //date modified??
 
-//MISSING IN PLUG-INS: SAMPLE1 AND IMPACT. I THINK THIS IS POSSIBLE DOOD
+//todo MISSING IN PLUG-INS: SAMPLE1 AND IMPACT. I THINK THIS IS POSSIBLE DOOD
 namespace Studio_One_Alter_Sample_Refs
 {
+	enum FileType
+	{
+		MediaPool,
+		SampleOne
+	}
 	internal class Program
 	{
 		static uint _refUpdateCount = 0;
+		static uint _projectsUpdated = 0;
 		const int XML_WRAP_CHARACTER_COUNT = 100;
 		const string MEDIA_POOL = "Song/mediapool.xml";
 		static List<string> _newSampleFolders = new();
 		static Dictionary<string, string?> _discoveredFiles = new();
 		static int count = 0;
+		static Dictionary<FileType, string> _nodesToFind = new Dictionary<FileType, string> {
+			{ FileType.MediaPool, "//AudioClip/Url" },
+			{ FileType.SampleOne, "//Zone/Attributes" }
+		};
+		const string MY_FILE_PATH = "C:\\Users\\chadm\\Desktop\\Studio Songs";
 		static void Main(string[] args)
 		{
 			Console.WriteLine("WARNING!!! THIS PROGRAM ATTEMPTS TO OVERWRITE STUDIO ONE .SONG FILES. BY USING THIS PROGRAM YOU ASSUME ALL RISK AND ARE WILLING TO CORRUPT OR DELETE YOUR SONG FILES");
@@ -33,7 +51,7 @@ namespace Studio_One_Alter_Sample_Refs
 			while (true)
 			{
 				Console.WriteLine("Enter a folder path for ur (outdated) studio one songs:");
-				folderPath = Console.ReadLine();
+				folderPath = MY_FILE_PATH;//Console.ReadLine();
 				if (folderPath == null || !Directory.Exists(folderPath))
 				{
 					Console.WriteLine("Invalid option.");
@@ -47,7 +65,8 @@ namespace Studio_One_Alter_Sample_Refs
 			// TODO re-prompt user with the current settings and ask them to proceed (with another warning probs)
 			foreach (string songFolderPath in Directory.GetDirectories(folderPath))
 			{
-				var songFile = Directory.GetFiles(songFolderPath, "*.song").FirstOrDefault();
+				// TODO just selecting first legit song file. Do ppl ever store multiple in their folders??
+				var songFile = Directory.GetFiles(songFolderPath, "*.song").Where(x => !Path.GetFileName(x).StartsWith("._")).FirstOrDefault();
 				//throw new Exception("need to exclude ._*.song files...");
 				if (songFile == null)
 				{
@@ -72,7 +91,7 @@ namespace Studio_One_Alter_Sample_Refs
 					break;
 
 			}
-			Console.WriteLine($"\nUpdated {_refUpdateCount} sample references.");
+			Console.WriteLine($"\nUpdated {_refUpdateCount} sample references ({_projectsUpdated} songs)");
 			Console.WriteLine("\nPress enter to exit...");
 			Console.ReadLine();
 		}
@@ -81,6 +100,7 @@ namespace Studio_One_Alter_Sample_Refs
 			Console.WriteLine("\n*****************************************");
 			Console.WriteLine($"Finding samples for {sourceFilePath}");
 			Console.WriteLine("\n*****************************************\n");
+			uint countBeforeCurFile = _refUpdateCount;
 			// TODO test inputting both / and \\
 			string tempFilePath = sourceFilePath + "temp"; // will this work lmao
 			using (FileStream sourceStream = new FileStream(sourceFilePath, FileMode.Open))
@@ -90,6 +110,7 @@ namespace Studio_One_Alter_Sample_Refs
 			{
 				foreach (ZipArchiveEntry entry in source.Entries)
 				{
+					// TODO could probs refactor
 					if (entry.FullName == MEDIA_POOL)
 					{
 						// modify
@@ -98,7 +119,18 @@ namespace Studio_One_Alter_Sample_Refs
 						using (var writer = new StreamWriter(destinationEntry.Open(), Encoding.UTF8))
 						using (var reader = new StreamReader(entry.Open(), Encoding.UTF8))
 						{
-							writer.Write(AlterFile(reader));
+							writer.Write(AlterFile(reader, FileType.MediaPool));
+						}
+					}
+					else if (entry.FullName.Contains("SampleOne"))
+					{
+						// modify
+						var destinationEntry = destination.CreateEntry(entry.FullName);
+
+						using (var writer = new StreamWriter(destinationEntry.Open(), Encoding.UTF8))
+						using (var reader = new StreamReader(entry.Open(), Encoding.UTF8))
+						{
+							writer.Write(AlterFile(reader, FileType.SampleOne));
 						}
 					}
 					else
@@ -112,37 +144,59 @@ namespace Studio_One_Alter_Sample_Refs
 					}
 				}
 			}
-			File.Delete(sourceFilePath);
-			File.Move(tempFilePath, sourceFilePath);
-		}
-		static string AlterFile(StreamReader mediaPoolData)
-		{
-			string? SearchMyDirOfficer(DirectoryInfo currentDir, string fileName)
+			if (_refUpdateCount - countBeforeCurFile == 0)
 			{
-				var triedFile = currentDir.EnumerateFiles().ToList().FirstOrDefault(x => x.Name == fileName);
-				if (triedFile != null)
-				{
-					return triedFile.FullName;
-				}
-				var dirs = currentDir.EnumerateDirectories();
-				foreach (var dir in dirs)
-				{
-					var res = SearchMyDirOfficer(dir, fileName);
-					if (res != null) return res;
-				}
-				return null;
+				// Don't modify files
+				File.Delete(tempFilePath);
 			}
+			else
+			{
+				File.Delete(sourceFilePath);
+				File.Move(tempFilePath, sourceFilePath);
+				_projectsUpdated++;
+			}
+		}
+		static string? SearchMyDirOfficer(DirectoryInfo currentDir, string fileName)
+		{
+			var triedFile = currentDir.EnumerateFiles().ToList().FirstOrDefault(x => x.Name == fileName);
+			if (triedFile != null)
+			{
+				return triedFile.FullName;
+			}
+			var dirs = currentDir.EnumerateDirectories();
+			foreach (var dir in dirs)
+			{
+				var res = SearchMyDirOfficer(dir, fileName);
+				if (res != null) return res;
+			}
+			return null;
+		}
+		static string AlterFile(StreamReader fileData, FileType fileType)
+		{
 			XmlReaderSettings settings = new XmlReaderSettings { NameTable = new NameTable() };
 			XmlNamespaceManager xmlns = new XmlNamespaceManager(settings.NameTable);
 			xmlns.AddNamespace("x", "peepeepoopoo");
 			XmlParserContext context = new XmlParserContext(null, xmlns, "", XmlSpace.Default);
-			XmlReader reader = XmlReader.Create(mediaPoolData, settings, context);
+			XmlReader reader = XmlReader.Create(fileData, settings, context);
 			XmlDocument xmlDoc = new();
 			xmlDoc.Load(reader);
-			XmlNodeList elements = xmlDoc.SelectNodes("//AudioClip/Url");
+			XmlNodeList? elements = xmlDoc.SelectNodes(_nodesToFind[fileType]);
+			if (elements != null)
+			{
+				UpdateXmlNodes(elements);
+			}
+
+			return Beautify(xmlDoc);
+		}
+		/// <summary>
+		/// Search the given nodes for a url attribute and update it if possible.
+		/// </summary>
+		/// <param name="elements"></param>
+		static void UpdateXmlNodes(XmlNodeList elements)
+		{
 			foreach (XmlNode element in elements)
 			{
-				string fpath = element.Attributes?.GetNamedItem("url")?.Value;
+				string? fpath = element.Attributes?.GetNamedItem("url")?.Value;
 				if (fpath == null) continue;
 				string[] dirName = fpath.Split('/');
 				string fileName = dirName[dirName.Length - 1];
@@ -162,9 +216,16 @@ namespace Studio_One_Alter_Sample_Refs
 				}
 				if (matchingFile != null)
 				{
+					string newAttrib = "file:///" + matchingFile.Replace("\\", "/");
+					if (fpath == newAttrib)
+					{
+						// No need to overwrite, the link is already good
+						Console.WriteLine($"{fileName} was already linked correctly");
+						continue;
+					}
 					Console.WriteLine($"FOUND A MATCH!!! {fileName} found in {matchingFile}");
 					// rewrite
-					element.Attributes.GetNamedItem("url").Value = "file:///" + matchingFile.Replace("\\", "/");
+					element.Attributes!.GetNamedItem("url")!.Value = newAttrib;
 					_refUpdateCount++;
 				}
 				else
@@ -172,10 +233,10 @@ namespace Studio_One_Alter_Sample_Refs
 					Console.WriteLine($"Couldn't find a match for {fileName} ...");
 				}
 			}
-			return Beautify(xmlDoc);
+
 		}
 		/// <summary>
-		/// I hate this. I want to copy s1's format EXACTLY (or as close as possible)
+		/// I hate this. I want to copy s1's format EXACTLY (or as close as possible). This probably doesn't matter a single bit
 		/// </summary>
 		/// <param name="doc"></param>
 		/// <returns></returns>
