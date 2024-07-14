@@ -1,21 +1,38 @@
 ﻿using System.IO.Compression;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Xml;
 
+// todo check for wonky symbols in file names
+
+//date modified??
+
+//MISSING IN PLUG-INS: SAMPLE1 AND IMPACT. I THINK THIS IS POSSIBLE DOOD
 namespace Studio_One_Alter_Sample_Refs
 {
 	internal class Program
 	{
-		static int counter = 0;
+		static uint _refUpdateCount = 0;
 		const int XML_WRAP_CHARACTER_COUNT = 100;
 		const string MEDIA_POOL = "Song/mediapool.xml";
+		static List<string> _newSampleFolders = new();
+		static Dictionary<string, string?> _discoveredFiles = new();
+		static int count = 0;
 		static void Main(string[] args)
 		{
+			Console.WriteLine("WARNING!!! THIS PROGRAM ATTEMPTS TO OVERWRITE STUDIO ONE .SONG FILES. BY USING THIS PROGRAM YOU ASSUME ALL RISK AND ARE WILLING TO CORRUPT OR DELETE YOUR SONG FILES");
+			Console.WriteLine("I AM NOT LIABLE FOR ANY DAMAGES CAUSED BY THIS PROGRAM. IF YOU DON'T KNOW WHAT YOU ARE DOING YOU SHOULD NOT PROCEED. BACKUP YOUR SONGS BEFORE PROCEEDING!!!!!");
+			Console.WriteLine("\nThis program is in no way affiliated with Presonus or Studio One. It may or may not work, I'd recommend trying this on a few projects as a test before going full send.");
+			Console.WriteLine("Now let's get to work getting rid of that super annoying process of manually finding all your samples for EVERY song ;)\n");
+			_newSampleFolders.Add("C:\\Users\\chadm\\Desktop\\Samples");
+
+			for (int i = 0; i < _newSampleFolders.Count; i++)
+			{
+				_newSampleFolders[i] = Path.GetFullPath(_newSampleFolders[i]);
+			}
 			string folderPath;
 			while (true)
 			{
-				Console.WriteLine("Enter a filepath for ur studio one songs:");
+				Console.WriteLine("Enter a folder path for ur (outdated) studio one songs:");
 				folderPath = Console.ReadLine();
 				if (folderPath == null || !Directory.Exists(folderPath))
 				{
@@ -27,42 +44,47 @@ namespace Studio_One_Alter_Sample_Refs
 					break;
 				}
 			}
+			// TODO re-prompt user with the current settings and ask them to proceed (with another warning probs)
 			foreach (string songFolderPath in Directory.GetDirectories(folderPath))
 			{
 				var songFile = Directory.GetFiles(songFolderPath, "*.song").FirstOrDefault();
+				//throw new Exception("need to exclude ._*.song files...");
 				if (songFile == null)
 				{
 					// TODO maybe check autosaves here
-					Console.WriteLine($"No song file found in {songFolderPath}");
+					Console.WriteLine($"No song file found in {songFolderPath} (it may have some autosaves)...skipping to next");
 					continue;
 				}
 
-				songFile = "D:\\Everything\\Studio Songs\\Chadsture house\\Chadsture house.song";
-				string outputFile = "C:\\Users\\chadm\\Desktop\\finalNewChadsture.zip";
-				LoadProject(songFile, outputFile);
-				break;
+				LoadProject(songFile);
 				/*
-				return;
-				byte[] fileContent = File.ReadAllBytes(songFile);
-				string xmlContent = ExtractXmlContent(fileContent);
-				//Console.WriteLine(xmlContent);
-
-				string originalContent = File.ReadAllText(songFile);
-				foreach (var character in originalContent)
+				try
 				{
-					Console.Write(character);
 				}
-				//Console.WriteLine(originalContent);
-				string xmlContent = ExtractXmlContent(originalContent);
-				Console.WriteLine($"xml content: {xmlContent}");*/
+				catch (Exception ex)
+				{
+					Console.WriteLine("\nAn exception occured:");
+					Console.WriteLine(ex.Message);
+					break;
+				}*/
+				count++;
+				if (count > 2)
+					break;
 
 			}
+			Console.WriteLine($"\nUpdated {_refUpdateCount} sample references.");
+			Console.WriteLine("\nPress enter to exit...");
+			Console.ReadLine();
 		}
-		public static void LoadProject(string sourceFilePath, string destFilePath)
+		public static void LoadProject(string sourceFilePath)
 		{
-
+			Console.WriteLine("\n*****************************************");
+			Console.WriteLine($"Finding samples for {sourceFilePath}");
+			Console.WriteLine("\n*****************************************\n");
+			// TODO test inputting both / and \\
+			string tempFilePath = sourceFilePath + "temp"; // will this work lmao
 			using (FileStream sourceStream = new FileStream(sourceFilePath, FileMode.Open))
-			using (FileStream destinationStream = new FileStream(destFilePath, FileMode.Create))
+			using (FileStream destinationStream = new FileStream(tempFilePath, FileMode.Create))
 			using (ZipArchive source = new ZipArchive(sourceStream, ZipArchiveMode.Read))
 			using (ZipArchive destination = new ZipArchive(destinationStream, ZipArchiveMode.Create))
 			{
@@ -90,150 +112,65 @@ namespace Studio_One_Alter_Sample_Refs
 					}
 				}
 			}
-
-			/*
-				byte[] archiveFile;
-			var archiveStream = new MemoryStream();
-			//var destination = new ZipA
-			Console.WriteLine($"{filePath}");
-			using (ZipArchive zipArchive = ZipFile.OpenRead(filePath))
-			{
-
-
-				//zipArchive.Entries.ToList().ForEach(x => Console.WriteLine(x));
-				string totalString = "";
-				using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create, true))
-				{
-					foreach (var projectEntry in zipArchive.Entries)
-					{
-						if (projectEntry.FullName == MEDIA_POOL)
-						{
-							// edit archive
-							continue;
-						}
-						else
-						{
-							var newEntry = 
-								projectEntry;
-							using var zipStream = archiveEntry.Open();
-							zipStream.w
-						}
-						//totalString += $"\n{projectEntry}:\n";
-						Console.WriteLine($"\n{projectEntry}");
-						continue;
-						Stream entryStream = projectEntry.Open();
-						using (StreamReader reader = new StreamReader(entryStream, Encoding.UTF8, true))
-						{
-							totalString += reader.ReadToEnd();
-								//s.Write(reader.ReadToEnd());
-						}
-						
-						using (StreamReader reader = StripBom(entryStream))
-						{
-							Console.WriteLine(reader.ReadLine());
-							//XmlSerializer serializer = new XmlSerializer(typeof(Project));
-							//return (Project)serializer.Deserialize(reader);
-						}
-
-					}
-				}
-	/*
-				string xmlDir = "C:\\Users\\chadm\\Desktop\\s1output.txt";
-				using (StreamWriter s = new StreamWriter(xmlDir))
-				{
-					s.WriteLine(totalString);
-				}
-				/*
-				using (var fileStream = new FileStream("C:\\Users\\chadm\\Desktop\\s1songoutput.txt", FileMode.Create))
-				{
-					fileStream.WriteLine(zipArchive.ToString());
-				}*/
-
-				/*
-				//ZipArchiveEntry projectEntry = zipArchive.GetEntry("PROJECT_FILE"); // Adjust the name as needed
-				if (projectEntry == null)
-				{
-					throw new FileNotFoundException("Project file not found in the archive.");
-				}
-				using (Stream entryStream = projectEntry.Open())
-				using (StreamReader reader = StripBom(entryStream))
-				{
-					//XmlSerializer serializer = new XmlSerializer(typeof(Project));
-					//return (Project)serializer.Deserialize(reader);
-				}
-			}
-			archiveStream.Dispose();
-				*/
-		}
-		public static StreamReader StripBom(Stream inputStream)
-		{
-			using (BinaryReader reader = new BinaryReader(inputStream, Encoding.UTF8, true))
-			{
-				byte[] buffer = new byte[4];
-				int bytesRead = reader.Read(buffer, 0, 4);
-
-				Encoding encoding = Encoding.UTF8;
-				int bomLength = 0;
-
-				if (bytesRead >= 3 && buffer[0] == 0xef && buffer[1] == 0xbb && buffer[2] == 0xbf) // UTF-8 BOM
-				{
-					encoding = Encoding.UTF8;
-					bomLength = 3;
-				}
-				else if (bytesRead >= 2 && buffer[0] == 0xff && buffer[1] == 0xfe) // UTF-16 LE BOM
-				{
-					encoding = Encoding.Unicode;
-					bomLength = 2;
-				}
-				else if (bytesRead >= 2 && buffer[0] == 0xfe && buffer[1] == 0xff) // UTF-16 BE BOM
-				{
-					encoding = Encoding.BigEndianUnicode;
-					bomLength = 2;
-				}
-				else if (bytesRead == 4 && buffer[0] == 0x00 && buffer[1] == 0x00 && buffer[2] == 0xfe && buffer[3] == 0xff) // UTF-32 BE BOM
-				{
-					encoding = new UTF32Encoding(true, true);
-					bomLength = 4;
-				}
-				else if (bytesRead == 4 && buffer[0] == 0xff && buffer[1] == 0xfe && buffer[2] == 0x00 && buffer[3] == 0x00) // UTF-32 LE BOM
-				{
-					encoding = new UTF32Encoding(false, true);
-					bomLength = 4;
-				}
-
-				// Create a MemoryStream and write the remaining bytes from the input stream
-				MemoryStream memoryStream = new MemoryStream();
-				memoryStream.Write(buffer, bomLength, bytesRead - bomLength);
-
-				byte[] tempBuffer = new byte[4096]; // Buffer size for reading chunks from input stream
-				int bytesReadInChunk;
-
-				while ((bytesReadInChunk = reader.Read(tempBuffer, 0, tempBuffer.Length)) > 0)
-				{
-					memoryStream.Write(tempBuffer, 0, bytesReadInChunk);
-				}
-
-				memoryStream.Position = 0; // Reset the memory stream position
-
-				return new StreamReader(memoryStream, encoding);
-			}
+			File.Delete(sourceFilePath);
+			File.Move(tempFilePath, sourceFilePath);
 		}
 		static string AlterFile(StreamReader mediaPoolData)
 		{
+			string? SearchMyDirOfficer(DirectoryInfo currentDir, string fileName)
+			{
+				var triedFile = currentDir.EnumerateFiles().ToList().FirstOrDefault(x => x.Name == fileName);
+				if (triedFile != null)
+				{
+					return triedFile.FullName;
+				}
+				var dirs = currentDir.EnumerateDirectories();
+				foreach (var dir in dirs)
+				{
+					var res = SearchMyDirOfficer(dir, fileName);
+					if (res != null) return res;
+				}
+				return null;
+			}
 			XmlReaderSettings settings = new XmlReaderSettings { NameTable = new NameTable() };
 			XmlNamespaceManager xmlns = new XmlNamespaceManager(settings.NameTable);
 			xmlns.AddNamespace("x", "peepeepoopoo");
 			XmlParserContext context = new XmlParserContext(null, xmlns, "", XmlSpace.Default);
 			XmlReader reader = XmlReader.Create(mediaPoolData, settings, context);
-			//XElement xmlTree = XElement.Parse(reader);
-			//xmlTree.DescendantNodes()
 			XmlDocument xmlDoc = new();
-			//Console.WriteLine(mediaPoolData.ReadToEnd());
 			xmlDoc.Load(reader);
-			XmlNodeList elements = xmlDoc.SelectNodes("//*");
+			XmlNodeList elements = xmlDoc.SelectNodes("//AudioClip/Url");
 			foreach (XmlNode element in elements)
 			{
-				//Console.WriteLine(element.Name);
+				string fpath = element.Attributes?.GetNamedItem("url")?.Value;
+				if (fpath == null) continue;
+				string[] dirName = fpath.Split('/');
+				string fileName = dirName[dirName.Length - 1];
+				string? matchingFile;
+				if (_discoveredFiles.TryGetValue(fileName, out matchingFile))
+				{
+					Console.WriteLine($"{fileName} was cached, nice.");
+				}
+				else
+				{
+					foreach (var path in _newSampleFolders)
+					{
+						matchingFile = SearchMyDirOfficer(new DirectoryInfo(path), fileName);
+						if (matchingFile != null) break;
+					}
+					_discoveredFiles[fileName] = matchingFile; // cache to make our other file searches a billion times faster
+				}
+				if (matchingFile != null)
+				{
+					Console.WriteLine($"FOUND A MATCH!!! {fileName} found in {matchingFile}");
+					// rewrite
+					element.Attributes.GetNamedItem("url").Value = "file:///" + matchingFile.Replace("\\", "/");
+					_refUpdateCount++;
+				}
+				else
+				{
+					Console.WriteLine($"Couldn't find a match for {fileName} ...");
+				}
 			}
 			return Beautify(xmlDoc);
 		}
@@ -262,7 +199,7 @@ namespace Studio_One_Alter_Sample_Refs
 						myNodeString.Append(' ', 12); //idk alright? this is just how studio one does (or did) it
 						if (node.Name == "AudioPartClip")
 						{
-							myNodeString.Append(' ', 3); // this is not maintainable
+							myNodeString.Append(' ', 3); // this is not maintainable ;)
 						}
 					}
 					else
@@ -291,33 +228,6 @@ namespace Studio_One_Alter_Sample_Refs
 			}
 			int tabCount = 0;
 			return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n" + GetInnerXML(doc.DocumentElement, tabCount);
-			//doc.namesp
-			StringBuilder sb = new StringBuilder();
-			XmlWriterSettings settings = new XmlWriterSettings
-			{
-				Indent = true,
-				IndentChars = "\t",
-				NewLineChars = "\r\n",
-				OmitXmlDeclaration = true
-			};
-			using (XmlWriter writer = XmlWriter.Create(sb, settings))
-			{
-				doc.Save(writer);
-			}
-			string stringTheory = sb.ToString().Replace(" xmlns:x=\"peepeepoopoo\"","").Replace("\" />", "\"/>"); // probs gonna take a year
-			return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n" + stringTheory + "\r\n";
-		}
-		static string ExtractXmlContent(byte[] content)
-		{
-			string contentStr = Encoding.UTF8.GetString(content);
-			foreach (var c in contentStr)
-			{
-				Console.Write(c);
-				counter++;
-				if (counter > 200) break;
-			}
-			Match match = Regex.Match(contentStr, "<\\?xml.*?</Song>", RegexOptions.Singleline);
-			return match.Success ? match.Value : null;
 		}
 	}
 }
